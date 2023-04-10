@@ -22,6 +22,12 @@ libp2p = { git = "https://github.com/p-shahi/rust-libp2p.git", branch = "depreca
 	"kad",
 	"rsa",
 	"ed25519",
+	"websocket",
+	"noise",
+	"yamux",
+] }
+libp2p-tcp = { git = "https://github.com/p-shahi/rust-libp2p.git", branch = "deprecate/gossipsub-close-event-update-multiaddr", version = "0.39.0", features = [
+	"tokio",
 ] }
 libp2p-webrtc = { git = "https://github.com/p-shahi/rust-libp2p.git", branch = "deprecate/gossipsub-close-event-update-multiaddr", version = "0.4.0-alpha.4", features = [
 	"tokio",

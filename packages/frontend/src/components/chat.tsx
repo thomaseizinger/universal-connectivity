@@ -56,11 +56,10 @@ export default function ChatContainer() {
       const msg = new TextDecoder().decode(data)
       console.log(`${topic}: ${msg}`)
 
-      if (evt.detail.type === 'signed') {
-        const peerId = evt.detail.from.toString()
-      } else {
+      // if (evt.detail.type === 'signed') {
         setMessages([...messages, { msg, from: 'other', peerId: 'unkonwn' }])
-      }
+
+      // }
       // Append new message
     }
 

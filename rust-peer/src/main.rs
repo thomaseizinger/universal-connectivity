@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use futures::StreamExt;
 use libp2p::{
-    core::muxing::StreamMuxerBox,
+    core::{muxing::StreamMuxerBox, upgrade::Version},
     gossipsub, identify, identity,
     kad::record::store::MemoryStore,
     kad::{Kademlia, KademliaConfig},
@@ -12,7 +12,11 @@ use libp2p::{
         keep_alive, AddressRecord, AddressScore, NetworkBehaviour, Swarm, SwarmBuilder, SwarmEvent,
     },
     Multiaddr, PeerId, Transport,
+    websocket,
+    noise, yamux,
 };
+
+use libp2p_tcp as tcp;
 use libp2p_webrtc as webrtc;
 use log::{debug, error, info, warn};
 use rand::thread_rng;
@@ -28,7 +32,7 @@ use std::{collections::hash_map::DefaultHasher, time::Duration};
 //     "QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
 // ];
 
-const TICK_INTERVAL: Duration = Duration::from_secs(5);
+const TICK_INTERVAL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Parser)]
 #[clap(name = "universal connectivity rust peer")]
@@ -51,11 +55,11 @@ async fn main() -> Result<()> {
 
     let mut swarm = create_swarm()?;
 
-    swarm.listen_on(format!("/ip4/0.0.0.0/udp/9090/webrtc-direct").parse()?)?;
+    swarm.listen_on(format!("/ip4/0.0.0.0/tcp/9090/ws").parse()?)?;
 
     if let Some(listen_address) = opt.listen_address {
         swarm.add_external_address(
-            format!("/ip4/{}/udp/9090/webrtc-direct", listen_address).parse()?,
+            format!("/ip4/{}/tcp/9090/ws", listen_address).parse()?,
             AddressScore::Infinite,
         );
     }
@@ -175,10 +179,12 @@ fn create_swarm() -> Result<Swarm<Behaviour>> {
     // subscribes to our topic
     gossipsub.subscribe(&topic)?;
 
-    let transport = webrtc::tokio::Transport::new(
-        local_key.clone(),
-        webrtc::tokio::Certificate::generate(&mut thread_rng())?,
-    );
+    let transport = websocket::WsConfig::new(tcp::tokio::Transport::new(tcp::Config::new()))
+        .upgrade(Version::V1Lazy)
+        .authenticate(noise::NoiseAuthenticated::xx(&local_key.clone())?)
+        .multiplex(yamux::YamuxConfig::default())
+        .timeout(Duration::from_secs(5))
+        .boxed();
 
     let identify_config = identify::Behaviour::new(
         identify::Config::new("/ipfs/0.1.0".into(), local_key.public().clone())
@@ -198,10 +204,6 @@ fn create_swarm() -> Result<Swarm<Behaviour>> {
     //     // TODO: update this
     //     kad_behaviour.add_address(&peer.parse()?, "/dnsaddr/bootstrap.libp2p.io".parse()?);
     // }
-
-    let transport = transport
-        .map(|(local_peer_id, conn), _| (local_peer_id, StreamMuxerBox::new(conn)))
-        .boxed();
 
     let behaviour = Behaviour {
         gossipsub,
